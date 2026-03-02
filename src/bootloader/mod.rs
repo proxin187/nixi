@@ -1,6 +1,6 @@
 mod error;
 
-use crate::kernel::mem::pma;
+use crate::kernel::mem::pma::PhysicalMemoryAllocator;
 
 use error::BootError;
 
@@ -11,6 +11,7 @@ use uefi::prelude::*;
 
 pub struct BootInfo {
     pub acpi: *const core::ffi::c_void,
+    pub pma: PhysicalMemoryAllocator,
 }
 
 pub fn boot() -> Result<(), BootError> {
@@ -27,8 +28,7 @@ pub fn boot() -> Result<(), BootError> {
     match acpi {
         Some(acpi) => {
             let mmap = unsafe { boot::exit_boot_services(None) };
-
-            pma::init(mmap);
+            let pma = PhysicalMemoryAllocator::new(mmap);
 
             Ok(())
         },

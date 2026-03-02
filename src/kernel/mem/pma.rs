@@ -1,51 +1,77 @@
-///! The physical memory allocator handles allocation of page frames
+///! The physical memory allocator handles allocation of physical frames, it does not concern
+///! itself with virtual memory.
 
 use uefi::mem::memory_map::{MemoryType, MemoryMap, MemoryMapOwned};
-use x86_64::structures::paging::{FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PhysFrame};
+use x86_64::structures::paging::{FrameAllocator, PhysFrame, Size4KiB};
+use x86_64::PhysAddr;
 
 
 pub struct PhysicalMemoryAllocator {
-    frames: [u128; 2048],
+    bitmap: [u128; 2048],
 }
 
 impl PhysicalMemoryAllocator {
+    /// Initialize the physical memory allocator
     pub fn new(mmap: MemoryMapOwned) -> PhysicalMemoryAllocator {
-        let mut frames = [0u128; 2048];
-
-        // TODO: instead of both filling the frames and identity mapping in a single iteration, we
-        // can instead have two separate stages, a first stage where it fills the frames so that
-        // its possible to use the allocator, then we do the identity mapping
-        //
-        // the other problem then will be that how do we identity map the first allocation?
-        // specifically, do we need to identity map the page tables?
+        let mut bitmap = [0u128; 2048];
 
         for descriptor in mmap.entries() {
-            match descriptor.ty {
-                MemoryType::CONVENTIONAL => {
-                    let base = descriptor.phys_start as usize / 4096;
+            if descriptor.ty != MemoryType::CONVENTIONAL {
+                let base = descriptor.phys_start as usize / 4096;
 
-                    for frame in 0..descriptor.page_count {
-                        let bit = base + frame as usize;
+                for frame in 0..descriptor.page_count {
+                    let bit = base + frame as usize;
 
-                        frames[bit / u128::BITS as usize] |= 1u128 << (bit % u128::BITS as usize);
-                    }
-                },
-                _ => {
-                    // TODO: here we have to identity map the memory
-                },
+                    bitmap[bit / u128::BITS as usize] |= 1u128 << (bit % u128::BITS as usize);
+                }
             }
         }
 
         PhysicalMemoryAllocator {
-            frames,
+            bitmap,
         }
     }
 
-    pub fn alloc(&mut self, pages: usize) {
+    // TODO: implement allocation across multiple chunks
+    /// Allocate a continuous set of physical frames within a 128 frame chunk
+    pub fn alloc(&mut self, frames: usize) -> Option<*const ()> {
+        assert_ne!(frames, 0);
+
+        for (index, chunk) in self.bitmap.iter_mut().enumerate() {
+            if *chunk != u128::MAX {
+                let bit = chunk.trailing_ones();
+                let mask = ((1u128 << frames) - 1) << bit;
+
+                if *chunk & mask == 0u128 {
+                    *chunk |= mask;
+
+                    let address = ((index * 128) + bit as usize) * 4096;
+
+                    return Some(address as *const ());
+                }
+            }
+        }
+
+        None
     }
 
-    pub fn free(&mut self, page: Page) {
-        assert_eq!(page.size(), 4096);
+    /// Free a continuous set of physical frames
+    pub fn free(&mut self, address: *const (), frames: usize) {
+        assert_ne!(frames, 0);
+
+        let base = address as usize / 4096;
+
+        for bit in base..base + frames {
+            self.bitmap[bit / u128::BITS as usize] &= !(1u128 << (bit % u128::BITS as usize));
+        }
+    }
+}
+
+unsafe impl FrameAllocator<Size4KiB> for PhysicalMemoryAllocator {
+    fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
+        let frame = self.alloc(1)?;
+
+        Some(PhysFrame::containing_address(PhysAddr::new(frame as u64)))
     }
 }
 
