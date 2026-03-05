@@ -7,6 +7,8 @@ nixi is a unix-like operating system.
 - [X] physical memory allocator
 
 ## Design
+nixi is self-contained and does not use a traditional bootloader, the kernel itself is a UEFI binary and doesn't need a bootloader.
+
 The kernel is identity mapped, and the userspace uses traditional paging to isolate process memory
 
 ## Development

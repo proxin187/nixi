@@ -17,16 +17,22 @@ impl PhysicalMemoryAllocator {
         let mut bitmap = [0u128; 2048];
 
         for descriptor in mmap.entries() {
+            crate::kernel::drivers::serial::write_fmt(format_args!("descriptor: {:x?}\n", descriptor));
+
             if descriptor.ty != MemoryType::CONVENTIONAL {
                 let base = descriptor.phys_start as usize / 4096;
 
                 for frame in 0..descriptor.page_count {
                     let bit = base + frame as usize;
 
+                    // TODO: the bug is that we panic here, the issue was never the loop. lets
+                    // implement a panic handler that writes to the serial
                     bitmap[bit / u128::BITS as usize] |= 1u128 << (bit % u128::BITS as usize);
                 }
             }
         }
+
+        crate::kernel::drivers::serial::write_fmt(format_args!("done\n"));
 
         PhysicalMemoryAllocator {
             bitmap,

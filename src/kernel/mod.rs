@@ -1,3 +1,4 @@
+pub mod drivers;
 pub mod mem;
 
 use crate::bootloader::BootInfo;
