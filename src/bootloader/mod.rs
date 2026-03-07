@@ -1,3 +1,5 @@
+//! The boot phase initializes drivers and modules before passing control to the kernel entry.
+
 mod error;
 
 use crate::kernel::mem::pma::PhysicalMemoryAllocator;
@@ -28,8 +30,6 @@ pub fn boot() -> Result<(), BootError> {
 
     match acpi {
         Some(acpi) => {
-            // NOTE: we cannot use any boot services after this, it includes println, so we must
-            // implement uart
             let mmap = unsafe { boot::exit_boot_services(None) };
             let mut pma = PhysicalMemoryAllocator::new(&mmap);
             let table = paging::init(&mmap, &mut pma);

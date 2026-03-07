@@ -5,6 +5,7 @@
 
 mod bootloader;
 mod kernel;
+mod helpers;
 
 use uefi::prelude::*;
 use uefi::println;
@@ -21,13 +22,9 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 fn main() -> Status {
     if let Err(err) = bootloader::boot() {
         println!("bootloader: error: {}", err);
-
-        loop {}
     }
 
     loop {}
-
-    Status::SUCCESS
 }
 
 

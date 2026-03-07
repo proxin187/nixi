@@ -1,37 +1,25 @@
-use core::fmt::Write;
+use crate::kernel::drivers::tty::Tty;
 
 use x86_64::instructions::interrupts;
 use x86::io;
-use spin::Mutex;
-use lazy_static::lazy_static;
 
 
-lazy_static! {
-    static ref SERIAL: Mutex<Serial> = Mutex::new(Serial::new(0x3f8));
-}
-
-#[inline]
-pub fn write_fmt(args: core::fmt::Arguments) {
-    let _ = SERIAL.lock().write_fmt(args);
-}
-
+/// A serial port tty. It acts as a passthrough layer, forwarding data directly to the serial port.
 pub struct Serial {
     port: u16,
 }
 
-impl Write for Serial {
-    fn write_str(&mut self, string: &str) -> Result<(), core::fmt::Error> {
+impl Tty for Serial {
+    fn write(&mut self, buf: &[u8]) {
         interrupts::without_interrupts(|| {
-            for byte in string.bytes() {
+            for byte in buf {
                 unsafe {
                     while io::inb(self.port + 5) & 0x20 == 0 {}
 
-                    io::outb(self.port, byte);
+                    io::outb(self.port, *byte);
                 }
             }
         });
-
-        Ok(())
     }
 }
 

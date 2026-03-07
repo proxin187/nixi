@@ -17,7 +17,7 @@ impl PhysicalMemoryAllocator {
         let mut bitmap = [0u128; 2048];
 
         for descriptor in mmap.entries() {
-            crate::kernel::drivers::serial::write_fmt(format_args!("descriptor: {:x?}\n", descriptor));
+            crate::helpers::log!("descriptor: {:x?}", descriptor);
 
             if descriptor.ty != MemoryType::CONVENTIONAL {
                 let base = descriptor.phys_start as usize / 4096;
@@ -32,7 +32,7 @@ impl PhysicalMemoryAllocator {
             }
         }
 
-        crate::kernel::drivers::serial::write_fmt(format_args!("done\n"));
+        crate::helpers::log!("done");
 
         PhysicalMemoryAllocator {
             bitmap,
