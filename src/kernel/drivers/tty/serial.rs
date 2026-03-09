@@ -9,20 +9,6 @@ pub struct Serial {
     port: u16,
 }
 
-impl Tty for Serial {
-    fn write(&mut self, buf: &[u8]) {
-        interrupts::without_interrupts(|| {
-            for byte in buf {
-                unsafe {
-                    while io::inb(self.port + 5) & 0x20 == 0 {}
-
-                    io::outb(self.port, *byte);
-                }
-            }
-        });
-    }
-}
-
 impl Serial {
     pub fn new(port: u16) -> Serial {
         unsafe {
@@ -39,6 +25,20 @@ impl Serial {
         Serial {
             port,
         }
+    }
+}
+
+impl Tty for Serial {
+    fn write(&mut self, buf: &[u8]) {
+        interrupts::without_interrupts(|| {
+            for byte in buf {
+                unsafe {
+                    while io::inb(self.port + 5) & 0x20 == 0 {}
+
+                    io::outb(self.port, *byte);
+                }
+            }
+        });
     }
 }
 

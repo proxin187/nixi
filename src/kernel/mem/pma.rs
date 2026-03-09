@@ -4,20 +4,43 @@
 use crate::helpers::*;
 
 use uefi::mem::memory_map::{MemoryType, MemoryMap, MemoryMapOwned};
-
 use x86_64::structures::paging::{FrameAllocator, PhysFrame, Size4KiB};
 use x86_64::PhysAddr;
+use spin::Mutex;
 
+static PMA: Mutex<PhysicalMemoryAllocator> = Mutex::new(PhysicalMemoryAllocator::new());
+
+#[inline(always)]
+pub fn init(mmap: &MemoryMapOwned) {
+    PMA.lock().init(mmap)
+}
+
+#[inline(always)]
+pub fn alloc(frames: usize) -> *const () {
+    PMA.lock().alloc(frames)
+}
+
+#[inline(always)]
+pub unsafe fn free(address: *const (), frames: usize) {
+    unsafe {
+        PMA.lock().free(address, frames)
+    }
+}
 
 pub struct PhysicalMemoryAllocator {
     bitmap: [u128; 2048],
 }
 
 impl PhysicalMemoryAllocator {
-    /// Initialize the physical memory allocator
-    pub fn new(mmap: &MemoryMapOwned) -> PhysicalMemoryAllocator {
-        let mut bitmap = [u128::MAX; 2048];
+    /// Create a new physical memory allocator
+    pub const fn new() -> PhysicalMemoryAllocator {
+        PhysicalMemoryAllocator {
+            bitmap: [0u128; 2048],
+        }
+    }
 
+    /// Initialize the physical memory allocator
+    pub fn init(&mut self, mmap: &MemoryMapOwned) {
         log!("initializing pma with {} mmap entries", mmap.len());
 
         for descriptor in mmap.entries() {
@@ -27,19 +50,15 @@ impl PhysicalMemoryAllocator {
                 for frame in 0..descriptor.page_count {
                     let bit = base + frame as usize;
 
-                    bitmap[bit / u128::BITS as usize] &= !(1u128 << (bit % u128::BITS as usize));
+                    self.bitmap[bit / u128::BITS as usize] &= !(1u128 << (bit % u128::BITS as usize));
                 }
             }
-        }
-
-        PhysicalMemoryAllocator {
-            bitmap,
         }
     }
 
     // TODO: implement allocation across multiple chunks
     /// Allocate a continuous set of physical frames within a 128 frame chunk
-    pub fn alloc(&mut self, frames: usize) -> Option<*const ()> {
+    pub fn alloc(&mut self, frames: usize) -> *const () {
         assert_ne!(frames, 0);
 
         for (index, chunk) in self.bitmap.iter_mut().enumerate() {
@@ -52,12 +71,12 @@ impl PhysicalMemoryAllocator {
 
                     let address = ((index * 128) + bit as usize) * 4096;
 
-                    return Some(address as *const ());
+                    return address as *const ();
                 }
             }
         }
 
-        None
+        panic!("out of memory")
     }
 
     /// Free a continuous set of physical frames.

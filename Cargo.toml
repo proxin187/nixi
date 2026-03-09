@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 lazy_static = { version = "1.5.0", features = ["spin_no_std"] }
-uefi = { version = "0.36.1", features = ["global_allocator", "alloc"] }
+uefi = { version = "0.36.1" }
 spin = "0.10.0"
 x86_64 = "0.15.4"
 x86 = "0.52.0"

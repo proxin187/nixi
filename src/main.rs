@@ -4,6 +4,8 @@
 #![no_main]
 #![no_std]
 
+extern crate alloc;
+
 mod bootloader;
 mod kernel;
 mod helpers;

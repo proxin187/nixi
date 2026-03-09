@@ -1,13 +1,12 @@
 mod serial;
+mod pool;
 
 use serial::Serial;
 
 use spin::Mutex;
 use lazy_static::lazy_static;
 
-// TODO: we will temporarily have the TTY be hardcoded to the serial until we implement a heap
-// allocator, after a heap allocator is ready we will switch over to having tty's be dynamic and
-// the ability to load multiple different ttys with different implementations
+use alloc::boxed::Box;
 
 lazy_static! {
     pub static ref TTY: Mutex<TtyHandle<Serial>> = Mutex::new(TtyHandle::new(Serial::new(0x3f8)));
@@ -16,6 +15,12 @@ lazy_static! {
 /// A tty is a terminal interface
 pub trait Tty {
     fn write(&mut self, buf: &[u8]);
+}
+
+impl Tty for Box<dyn Tty> {
+    fn write(&mut self, buf: &[u8]) {
+        self.as_mut().write(buf);
+    }
 }
 
 /// A handle to a tty implementation
