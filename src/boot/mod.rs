@@ -1,9 +1,10 @@
-//! The boot phase initializes drivers and modules before passing control to the kernel entry.
+//! The boot phase initializes subsystems before passing control to the kernel entry
 
 mod error;
 
 use crate::kernel::mem::pma;
 use crate::kernel::irq;
+use crate::kernel;
 
 use error::BootError;
 
@@ -11,10 +12,7 @@ use uefi::table::cfg::ConfigTableEntry;
 use uefi::prelude::*;
 
 
-pub struct BootInfo {
-    pub acpi: *const core::ffi::c_void,
-}
-
+/// Exit boot services, initialize all subsystems and jump to kernel entry
 pub fn boot() -> Result<(), BootError> {
     let mut acpi: Option<*const core::ffi::c_void> = None;
 
@@ -34,15 +32,7 @@ pub fn boot() -> Result<(), BootError> {
 
             pma::init(&mmap);
 
-            let mut vector = alloc::vec::Vec::<char>::new();
-
-            crate::log!("vector: {:?}", vector);
-
-            vector.push('t');
-
-            crate::log!("vector: {:?}", vector);
-
-            Ok(())
+            kernel::entry();
         },
         None => Err(BootError::AcpiNotFound),
     }

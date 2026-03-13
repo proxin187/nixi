@@ -6,7 +6,7 @@
 
 extern crate alloc;
 
-mod bootloader;
+mod boot;
 mod kernel;
 mod helpers;
 
@@ -22,7 +22,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 #[entry]
 fn main() -> Status {
-    if let Err(err) = bootloader::boot() {
+    if let Err(err) = boot::boot() {
         error!("error: {}", err);
     }
 

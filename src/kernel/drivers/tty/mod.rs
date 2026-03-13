@@ -1,5 +1,4 @@
 mod serial;
-mod pool;
 
 use serial::Serial;
 

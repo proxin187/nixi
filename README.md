@@ -3,8 +3,15 @@
 nixi is a unix-like operating system.
 
 ## Roadmap
-- [ ] builtin bootloader
 - [X] physical memory allocator
+- [X] memory allocator
+- [X] tty over serial port
+- [ ] GOP graphics driver with bitmap font rendering
+- [ ] block device driver
+- [ ] filesystem
+- [ ] scheduler
+- [ ] syscalls
+- [ ] elf loader
 
 ## Design
 nixi is self-contained and does not use a traditional bootloader, the kernel itself is a UEFI binary and doesn't need a bootloader.
