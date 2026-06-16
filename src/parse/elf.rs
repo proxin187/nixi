@@ -23,14 +23,28 @@ struct ElfHeader {
 #[derive(Debug)]
 #[repr(packed, C)]
 pub struct ProgramHeader {
-    p_type: u32,
-    p_flags: u32,
-    p_offset: u64,
-    p_vaddr: u64,
-    p_paddr: u64,
-    p_filesz: u64,
-    p_memsz: u64,
-    p_align: u64,
+    pub p_type: u32,
+    pub p_flags: u32,
+    pub p_offset: u64,
+    pub p_vaddr: u64,
+    pub p_paddr: u64,
+    pub p_filesz: u64,
+    pub p_memsz: u64,
+    pub p_align: u64,
+}
+
+impl ProgramHeader {
+    /// PT_LOAD indicates a loadable segment
+    pub const PT_LOAD: u32 = 0x1;
+
+    /// PF_X indicates an executable segment
+    pub const PF_X: u32 = 0x1;
+
+    /// PF_W indicates a writeable segment
+    pub const PF_W: u32 = 0x2;
+
+    /// PF_R indicates a readable segment
+    pub const PF_R: u32 = 0x4;
 }
 
 /// An iterator over program headers
@@ -84,5 +98,10 @@ impl<'a> ElfObject<'a> {
                 + (self.elf_header.e_phnum as u64 * core::mem::size_of::<ProgramHeader>() as u64),
             bytes: self.bytes,
         }
+    }
+
+    /// Return virtual address of entry point for ELF object
+    pub fn entry(&self) -> u64 {
+        self.elf_header.e_entry
     }
 }

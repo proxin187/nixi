@@ -10,6 +10,9 @@ pub enum LoaderError {
     #[error("invalid ELF binary")]
     InvalidElf,
 
+    #[error("invalid layout for allocation")]
+    InvalidLayout,
+
     #[error(transparent)]
     Vfs(#[from] VfsError),
 }

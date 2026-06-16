@@ -91,6 +91,13 @@ impl ProcManager {
         }
     }
 
+    /// Get a mutable reference to the page table of a process
+    pub fn get_pt(&mut self, proc_id: ProcId) -> Option<&mut PageTable> {
+        self.procs
+            .get_mut(&proc_id)
+            .map(|proc| &mut proc.page_table)
+    }
+
     /// Adopt a task into a process. This does not modify the task and assumes the task has its proc_id field set correctly
     pub fn adopt_task(&mut self, proc_id: ProcId, task_id: TaskId) {
         if let Some(proc) = self.procs.get_mut(&proc_id) {

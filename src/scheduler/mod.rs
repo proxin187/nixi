@@ -11,6 +11,8 @@ use task::{Task, TaskId, TaskManager};
 
 use spin::{Lazy, Mutex};
 
+use crate::mem::paging::PageTable;
+
 /// The global scheduler
 static SCHEDULER: Lazy<Mutex<Scheduler>> = Lazy::new(|| Mutex::new(Scheduler::new()));
 
@@ -52,6 +54,11 @@ impl Scheduler {
         self.proc_manager.load_pt(proc_id);
 
         ctx
+    }
+
+    /// Get the page table of a process
+    pub fn get_pt(&mut self, proc_id: ProcId) -> Option<&mut PageTable> {
+        self.proc_manager.get_pt(proc_id)
     }
 
     /// Create a new process and return its process id

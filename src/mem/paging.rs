@@ -1,5 +1,7 @@
 //! Code for working with 64-bit paging
 
+use core::ops::Range;
+
 use crate::arch::x86_64;
 use crate::arch::x86_64::registers;
 use crate::mem::pma;
@@ -67,6 +69,21 @@ impl PageTable {
             let paddr = addr + (page * size.align());
 
             self.map(paddr, paddr, flags, size);
+        }
+    }
+
+    /// Map consecutive pages within a range
+    pub fn map_consecutive_range(
+        &mut self,
+        vaddr: Range<u64>,
+        paddr: u64,
+        flags: u64,
+        size: PageSize,
+    ) {
+        for page in 0..(vaddr.end - vaddr.start) / size.align() {
+            let offset = page * size.align();
+
+            self.map(vaddr.start + offset, paddr + offset, flags, size)
         }
     }
 

@@ -5,6 +5,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(arbitrary_self_types_pointers)]
 #![feature(option_reference_flattening)]
+#![feature(never_type)]
 #![no_main]
 #![no_std]
 
@@ -24,6 +25,8 @@ mod syscall;
 mod vfs;
 
 use arch::x86_64::{self, tables};
+use loader::Loader;
+use loader::error::LoaderError;
 use mem::pma;
 use scheduler::context;
 use vfs::MountSource;
@@ -49,7 +52,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 /// Load the init process
-pub fn load_init() -> ! {
+pub fn load_init() -> Result<!, LoaderError> {
     vfs::with_vfs(|vfs| {
         let root = vfs.root();
 
@@ -62,17 +65,7 @@ pub fn load_init() -> ! {
         );
     });
 
-    if let Err(err) = loader::load_from_fs("/init") {
-        panic!("failed to load init process: {:?}", err);
-    }
-
-    /*
-    scheduler::with_scheduler(|scheduler| {
-        let proc_id = scheduler.create_proc();
-
-        scheduler.create_task(proc_id, task1 as *const () as u64, 3);
-    });
-    */
+    Loader::from_fs("/init")?.load()?;
 
     context::enter_usermode();
 }
@@ -110,7 +103,9 @@ pub fn main() -> Status {
 
             pma::init(&mmap);
 
-            load_init();
+            let err = load_init().unwrap_err();
+
+            panic!("failed to load init: {}", err);
         }
         None => panic!("ACPI not found"),
     }
