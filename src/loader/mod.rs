@@ -75,6 +75,8 @@ impl Loader {
             //
             // The only mapping should happen here, or when the process allocates memory
 
+            crate::log!("header: {:?}", header);
+
             page_table.map_consecutive_range(
                 header.p_vaddr..header.p_vaddr + buf.len() as u64,
                 buf.as_ptr() as u64,

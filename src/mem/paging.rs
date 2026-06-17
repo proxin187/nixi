@@ -2,9 +2,11 @@
 
 use core::ops::Range;
 
+use super::error::MemoryError;
+use super::pma;
+
 use crate::arch::x86_64;
 use crate::arch::x86_64::registers;
-use crate::mem::pma;
 
 /// Represents the size of a page, modern processors support up to 1GiB pages
 #[derive(Debug, Clone, Copy)]
@@ -64,12 +66,20 @@ impl PageTable {
     }
 
     /// Identity map some memory given a start address, a page count, flags and the page size
-    pub fn identity_map(&mut self, addr: u64, pages: u64, flags: u64, size: PageSize) {
+    pub fn identity_map(
+        &mut self,
+        addr: u64,
+        pages: u64,
+        flags: u64,
+        size: PageSize,
+    ) -> Result<(), MemoryError> {
         for page in 0..pages {
             let paddr = addr + (page * size.align());
 
-            self.map(paddr, paddr, flags, size);
+            self.map(paddr, paddr, flags, size)?;
         }
+
+        Ok(())
     }
 
     /// Map consecutive pages within a range
@@ -79,23 +89,29 @@ impl PageTable {
         paddr: u64,
         flags: u64,
         size: PageSize,
-    ) {
+    ) -> Result<(), MemoryError> {
         for page in 0..(vaddr.end - vaddr.start) / size.align() {
             let offset = page * size.align();
 
-            self.map(vaddr.start + offset, paddr + offset, flags, size)
+            self.map(vaddr.start + offset, paddr + offset, flags, size)?;
         }
+
+        Ok(())
     }
 
     /// Map a virtual address to a physical address, both addresses must be aligned to the page size
     ///
     /// This is purely a safe convenience wrapper for [create_map](PageTable::create_map)
-    pub fn map(&mut self, vaddr: u64, paddr: u64, flags: u64, size: PageSize) {
+    pub fn map(
+        &mut self,
+        vaddr: u64,
+        paddr: u64,
+        flags: u64,
+        size: PageSize,
+    ) -> Result<(), MemoryError> {
         assert!(vaddr % size.align() == 0 && paddr % size.align() == 0);
 
-        unsafe {
-            self.create_map(vaddr, paddr, flags, size, size.levels(), self.pml4);
-        }
+        unsafe { self.create_map(vaddr, paddr, flags, size, size.levels(), self.pml4) }
     }
 
     /// Recursively create a page table mapping for a virtual address in the radix tree
@@ -109,7 +125,7 @@ impl PageTable {
         size: PageSize,
         depth: u8,
         table: *mut PageTableEntry,
-    ) {
+    ) -> Result<(), MemoryError> {
         let level = size.levels() as u64 - depth as u64;
         let index = (vaddr >> (12 + ((3 - level) * 9))) & 0x1ff;
 
@@ -122,6 +138,8 @@ impl PageTable {
                         pma::alloc_zeroed(1) as u64,
                         flags | PageTableEntryFlags::PRESENT,
                     );
+                } else if (*entry).is_page_map() {
+                    return Err(MemoryError::DescendedMappedPage);
                 }
 
                 self.create_map(
@@ -131,7 +149,7 @@ impl PageTable {
                     size,
                     depth - 1,
                     (*entry).physical_address() as *mut PageTableEntry,
-                );
+                )?;
             } else {
                 *entry = PageTableEntry::new(
                     paddr,
@@ -139,6 +157,8 @@ impl PageTable {
                 )
             }
         }
+
+        Ok(())
     }
 }
 
@@ -177,7 +197,11 @@ impl PageTableEntry {
     }
 
     /// Returns the physical address field of the entry
+    ///
+    /// This will panic if the PAGE_SIZE flag is set to prevent accidental misuse
     pub fn physical_address(&self) -> u64 {
+        assert!(!self.is_page_map());
+
         self.entry & (((1u64 << x86_64::physical_address_width()) - 1) << 12)
     }
 
