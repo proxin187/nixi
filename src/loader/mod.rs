@@ -24,7 +24,7 @@ fn translate_pflags_to_pte(p_flags: u32) -> u64 {
         flags |= PageTableEntryFlags::WRITE;
     }
 
-    flags
+    flags | PageTableEntryFlags::USER
 }
 
 /// The program loader loads a program from ELF into memory
@@ -53,39 +53,50 @@ impl Loader {
         Ok(Loader { bytes, proc_id })
     }
 
-    /// Load a program header into memory
-    fn load_header(&self, header: &ProgramHeader) -> Result<(), LoaderError> {
-        let size = header.p_memsz.next_multiple_of(4096) as usize;
-        let layout = Layout::from_size_align(size, header.p_align as usize)
-            .map_err(|_| LoaderError::InvalidLayout)?;
+    /// Allocate and fill buffer for program header
+    pub fn alloc_header_buf(&self, header: &ProgramHeader) -> Result<&'static [u8], LoaderError> {
+        let offset = header.p_vaddr & (4096 - 1);
+        let size = ((header.p_memsz + offset + 4095) & !(4096 - 1)) as usize;
 
-        let buf = unsafe { core::slice::from_raw_parts_mut(alloc::alloc::alloc(layout), size) };
+        let layout = Layout::from_size_align(size, 4096).map_err(|_| LoaderError::InvalidLayout)?;
+        let buf =
+            unsafe { core::slice::from_raw_parts_mut(alloc::alloc::alloc_zeroed(layout), size) };
 
-        buf[..header.p_filesz as usize].copy_from_slice(
+        buf[offset as usize..header.p_filesz as usize + offset as usize].copy_from_slice(
             &self.bytes
                 [header.p_offset as usize..header.p_offset as usize + header.p_filesz as usize],
         );
 
-        scheduler::with_scheduler(|scheduler| {
-            let page_table = scheduler
-                .get_pt(self.proc_id)
-                .expect("failed to get page table for new process");
+        Ok(buf)
+    }
 
-            // TODO: we should not identity map anything in the process, currently all processes are identity mapped from the start, this is wrong, we will have to remove this.
-            //
-            // The only mapping should happen here, or when the process allocates memory
+    /// Load a program header into memory
+    fn load_header(&self, header: &ProgramHeader) -> Result<(), LoaderError> {
+        if header.p_align != 0
+            && (header.p_vaddr % header.p_align != header.p_offset % header.p_align)
+        {
+            Err(LoaderError::InvalidElf)
+        } else {
+            let buf = self.alloc_header_buf(header)?;
 
-            crate::log!("header: {:?}", header);
+            let start_vaddr = header.p_vaddr & !(4096 - 1);
+            let end_vaddr = (header.p_vaddr + header.p_memsz + 4095) & !(4096 - 1);
 
-            page_table.map_consecutive_range(
-                header.p_vaddr..header.p_vaddr + buf.len() as u64,
-                buf.as_ptr() as u64,
-                translate_pflags_to_pte(header.p_flags),
-                PageSize::Page4KiB,
-            );
-        });
+            scheduler::with_scheduler(|scheduler| {
+                let page_table = scheduler
+                    .get_pt(self.proc_id)
+                    .expect("failed to get page table for new process");
 
-        Ok(())
+                page_table.map_consecutive_range(
+                    start_vaddr..end_vaddr,
+                    buf.as_ptr() as u64,
+                    translate_pflags_to_pte(header.p_flags),
+                    PageSize::Page4KiB,
+                )
+            })?;
+
+            Ok(())
+        }
     }
 
     /// Load the program into memory and create task

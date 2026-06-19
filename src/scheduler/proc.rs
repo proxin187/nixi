@@ -2,7 +2,7 @@
 
 use super::task::TaskId;
 
-use crate::mem::paging::{PageSize, PageTable, PageTableEntryFlags};
+use crate::mem::paging::PageTable;
 use crate::vfs::OwnedPath;
 
 use alloc::collections::BTreeMap;
@@ -29,16 +29,7 @@ pub struct Proc {
 impl Proc {
     /// Create a new process
     pub fn new() -> Proc {
-        let mut page_table = PageTable::new();
-
-        // TODO: here we should only map memory which is used by the process, identity mapping is
-        // only temporary
-        page_table.identity_map(
-            0,
-            1,
-            PageTableEntryFlags::USER | PageTableEntryFlags::WRITE,
-            PageSize::Page1GiB,
-        );
+        let page_table = PageTable::new();
 
         Proc {
             tasks: Vec::new(),

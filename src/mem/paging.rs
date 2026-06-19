@@ -109,9 +109,14 @@ impl PageTable {
         flags: u64,
         size: PageSize,
     ) -> Result<(), MemoryError> {
-        assert!(vaddr % size.align() == 0 && paddr % size.align() == 0);
-
-        unsafe { self.create_map(vaddr, paddr, flags, size, size.levels(), self.pml4) }
+        if let Some(misaligned) = (vaddr % size.align() != 0)
+            .then_some(vaddr)
+            .or_else(|| (paddr % size.align() != 0).then_some(paddr))
+        {
+            Err(MemoryError::MisalignedMap(misaligned))
+        } else {
+            unsafe { self.create_map(vaddr, paddr, flags, size, size.levels(), self.pml4) }
+        }
     }
 
     /// Recursively create a page table mapping for a virtual address in the radix tree

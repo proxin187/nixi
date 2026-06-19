@@ -7,4 +7,7 @@ use thiserror::Error;
 pub enum MemoryError {
     #[error("attempted to descend a mapped page (nested mapping is not possible)")]
     DescendedMappedPage,
+
+    #[error("attempted to map misaligned address: {0:#x}")]
+    MisalignedMap(u64),
 }

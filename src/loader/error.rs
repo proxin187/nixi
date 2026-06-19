@@ -1,5 +1,6 @@
 //! Loader errors
 
+use crate::mem::error::MemoryError;
 use crate::vfs::error::VfsError;
 
 use thiserror::Error;
@@ -15,4 +16,7 @@ pub enum LoaderError {
 
     #[error(transparent)]
     Vfs(#[from] VfsError),
+
+    #[error(transparent)]
+    Memory(#[from] MemoryError),
 }
