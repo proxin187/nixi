@@ -14,6 +14,20 @@ pub fn cr3_set(pml4: u64) {
     }
 }
 
+/// Read the Cr3 register
+pub fn read_cr3() -> u64 {
+    let mut pml4 = 0;
+
+    unsafe {
+        asm!(
+            "mov {pml4}, cr3",
+            pml4 = out(reg) pml4,
+        );
+    }
+
+    pml4
+}
+
 /// Cr4 feature flags
 pub struct Cr4Flags;
 

@@ -4,6 +4,8 @@ pub mod context;
 pub mod proc;
 pub mod task;
 
+use crate::mem::paging::PageTableEntry;
+
 use context::Context;
 
 use proc::{ProcId, ProcManager};
@@ -38,22 +40,38 @@ impl Scheduler {
         }
     }
 
-    /// Return the initial task and load its page table
-    pub fn load_initial_task(&self) -> &Task {
-        let task = self.task_manager.initial_task();
+    // TODO: nothing happens after we load the page table because the kernel code isnt mapped, so when it then tries to execute the kernel code, it just faults
 
-        self.proc_manager.load_pt(task.proc_id);
+    /// Return the initial task and page table
+    pub fn get_inital_task(&self) -> (&Task, *const PageTableEntry) {
+        let task = self
+            .task_manager
+            .get_task(TaskId::new(1))
+            .expect("no initial task");
 
-        task
+        let page_table = self
+            .proc_manager
+            .get_pt_ptr(task.proc_id)
+            .expect("page table not found for task");
+
+        (task, page_table)
     }
 
-    /// Perform a context switch
-    pub fn switch(&mut self, ctx: Context) -> Context {
+    /// Return the next context and page table
+    pub fn switch(&mut self, ctx: Context) -> (Context, *const PageTableEntry) {
         let (proc_id, ctx) = self.task_manager.switch(ctx);
 
-        self.proc_manager.load_pt(proc_id);
+        let page_table = self
+            .proc_manager
+            .get_pt_ptr(proc_id)
+            .expect("page table not found for process");
 
-        ctx
+        (ctx, page_table)
+    }
+
+    /// Get kernel and user stack for a task
+    pub fn get_task(&self, task_id: TaskId) -> &Task {
+        self.task_manager.get_task(task_id).expect("task not found")
     }
 
     /// Get the page table of a process

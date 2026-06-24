@@ -25,6 +25,8 @@ impl SyscallNumber {
 
 /// Dispatch a syscall to a handler
 pub fn dispatch(syscall: u64, args: [u64; 4]) -> Result<u64, SyscallError> {
+    crate::log!("syscall={}, args={:?}", syscall, args);
+
     match syscall {
         SyscallNumber::OPEN => {
             let path = unsafe { OwnedPath::from_raw_parts(args[0] as *mut u8, args[1] as usize) };

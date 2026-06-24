@@ -1,6 +1,9 @@
+//! Handling of interrupts
+
 use crate::arch::x86_64::interrupt::{PageFaultErrorCode, StackFrame};
 use crate::arch::x86_64::io;
 use crate::drivers::pic8259;
+use crate::mem::paging;
 use crate::scheduler::context;
 
 use crate::helpers::*;
@@ -40,6 +43,8 @@ pub extern "x86-interrupt" fn page_fault(stack_frame: StackFrame, error_code: Pa
     loop {}
 }
 
+// TODO: we must also map both the user stack and kernel stack for the process, the kernel stack is technically kind of insecure to map, however, we dont care as long as it works
+
 #[unsafe(naked)]
 pub fn timer_interrupt() {
     naked_asm!(
@@ -66,13 +71,21 @@ pub fn timer_interrupt() {
         "rdfsbase rax",
         "push rax",
 
+        // load the kernel page table
+        "mov rax, [{kernel_page_table}]",
+        "mov cr3, rax",
+
         // call switch
         "mov rcx, rsp",
-        "call {}",
+        "call {switch}",
 
         // call end_of_interrupt
         "mov rcx, 32",
-        "call {}",
+        "call {end_of_interrupt}",
+
+        // load the user page table
+        "mov rax, [{user_page_table}]",
+        "mov cr3, rax",
 
         // restore FS/GS
         "pop rax",
@@ -96,9 +109,12 @@ pub fn timer_interrupt() {
         "pop rcx",
         "pop rbx",
         "pop rax",
+
         "iretq",
-        sym context::switch,
-        sym pic8259::end_of_interrupt,
+        kernel_page_table = sym paging::KERNEL_PAGE_TABLE,
+        user_page_table = sym paging::USER_PAGE_TABLE,
+        switch = sym context::switch,
+        end_of_interrupt = sym pic8259::end_of_interrupt,
     );
 }
 

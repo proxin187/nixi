@@ -2,7 +2,7 @@
 
 use super::task::TaskId;
 
-use crate::mem::paging::PageTable;
+use crate::mem::paging::{PageTable, PageTableEntry};
 use crate::vfs::OwnedPath;
 
 use alloc::collections::BTreeMap;
@@ -29,11 +29,9 @@ pub struct Proc {
 impl Proc {
     /// Create a new process
     pub fn new() -> Proc {
-        let page_table = PageTable::new();
-
         Proc {
             tasks: Vec::new(),
-            page_table,
+            page_table: PageTable::new(),
             cwd: OwnedPath::from("/"),
         }
     }
@@ -87,6 +85,11 @@ impl ProcManager {
         self.procs
             .get_mut(&proc_id)
             .map(|proc| &mut proc.page_table)
+    }
+
+    /// Get a pointer to the page table of a process
+    pub fn get_pt_ptr(&self, proc_id: ProcId) -> Option<*mut PageTableEntry> {
+        self.procs.get(&proc_id).map(|proc| proc.page_table.pml4)
     }
 
     /// Adopt a task into a process. This does not modify the task and assumes the task has its proc_id field set correctly

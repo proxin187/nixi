@@ -5,9 +5,11 @@ use super::SCHEDULER;
 use crate::arch::x86_64::interrupt::StackFrame;
 use crate::arch::x86_64::tables;
 use crate::helpers::*;
+use crate::mem::paging;
 use crate::scheduler;
 
 use core::arch::asm;
+use core::sync::atomic::Ordering;
 
 /// Segment registers
 #[repr(C, packed)]
@@ -51,11 +53,11 @@ pub struct Context {
 pub fn enter_usermode() -> ! {
     log!("enter usermode");
 
-    let (stack_frame, kernel_stack) = scheduler::with_scheduler(|scheduler| {
-        let task = scheduler.load_initial_task();
+    let (page_table, stack_frame, kernel_stack) = scheduler::with_scheduler(|scheduler| {
+        let (task, page_table) = scheduler.get_inital_task();
 
-        (task.ctx.stack_frame, unsafe {
-            task.kernel_stack.as_ptr().add(task.kernel_stack.len())
+        (page_table, task.ctx.stack_frame, unsafe {
+            task.kernel_stack.0.as_ptr().add(task.kernel_stack.0.len())
         })
     });
 
@@ -63,12 +65,14 @@ pub fn enter_usermode() -> ! {
 
     unsafe {
         asm!(
+            "mov cr3, {page_table}",
             "push {ss}",
             "push {rsp}",
             "push {rflags}",
             "push {cs}",
             "push {rip}",
             "iretq",
+            page_table = in(reg) page_table,
             ss = in(reg) stack_frame.ss,
             rsp = in(reg) stack_frame.rsp,
             rflags = in(reg) stack_frame.rflags.flags,
@@ -85,11 +89,15 @@ pub fn enter_usermode() -> ! {
 pub extern "C" fn switch(ctx: *mut Context) {
     let mut scheduler = SCHEDULER.lock();
 
-    // log!("entry: {:x?}", unsafe { *ctx });
+    log!("entry: {:x?}", unsafe { *ctx });
 
     unsafe {
-        *ctx = scheduler.switch(*ctx);
+        let (context, page_table) = scheduler.switch(*ctx);
+
+        paging::USER_PAGE_TABLE.store(page_table as u64, Ordering::Relaxed);
+
+        *ctx = context;
     }
 
-    // log!("exit: {:x?}", unsafe { *ctx });
+    log!("exit: {:x?}", unsafe { *ctx });
 }

@@ -22,12 +22,16 @@ impl TaskId {
     }
 }
 
+/// A stack
+#[repr(C, align(4096))]
+pub struct Stack(pub [u8; 4096 * 4]);
+
 /// A task will be run by the scheduler on interval
 pub struct Task {
     pub proc_id: ProcId,
     pub ctx: Context,
-    pub user_stack: Box<[u8; 4096 * 4]>,
-    pub kernel_stack: Box<[u8; 4096 * 4]>,
+    pub user_stack: Box<Stack>,
+    pub kernel_stack: Box<Stack>,
     pub xsave: *mut u8,
 }
 
@@ -36,9 +40,10 @@ impl Task {
     pub fn new(proc_id: ProcId, entry: u64, privilege_level: u8) -> Task {
         let layout = Layout::from_size_align(x86_64::required_xsave_size() as usize, 64)
             .expect("xsave allocation shouldn't break alignment rules");
+
         let xsave = unsafe { alloc::alloc::alloc_zeroed(layout) };
 
-        let user_stack = Box::new([0; 4096 * 4]);
+        let user_stack = Box::new(Stack([0; 4096 * 4]));
 
         Task {
             proc_id,
@@ -49,12 +54,12 @@ impl Task {
                     rip: entry,
                     cs: 0x18 | (privilege_level as u64 & 3),
                     rflags: RFlags::new(1 | (1 << 9)),
-                    rsp: user_stack.as_ptr() as u64 + user_stack.len() as u64,
+                    rsp: user_stack.0.as_ptr() as u64 + user_stack.0.len() as u64,
                     ss: 0x20 | (privilege_level as u64 & 3),
                 },
             },
             user_stack,
-            kernel_stack: Box::new([0; 4096 * 4]),
+            kernel_stack: Box::new(Stack([0; 4096 * 4])),
             xsave,
         }
     }
@@ -97,9 +102,12 @@ impl TaskManager {
         }
     }
 
-    /// The the initial task. This is the first task which will be jumped to on entry to usermode
-    pub fn initial_task(&self) -> &Task {
-        &self.entries[self.next_task].task
+    /// Get a task from its task id
+    pub fn get_task(&self, task_id: TaskId) -> Option<&Task> {
+        self.entries
+            .iter()
+            .find(|entry| entry.task_id == task_id)
+            .map(|entry| &entry.task)
     }
 
     /// Create a task
@@ -134,7 +142,7 @@ impl TaskManager {
 
             let kernel_stack = &self.entries[next].task.kernel_stack;
 
-            tables::set_kernel_stack(kernel_stack.as_ptr().add(kernel_stack.len()));
+            tables::set_kernel_stack(kernel_stack.0.as_ptr().add(kernel_stack.0.len()));
         }
 
         (self.entries[next].task.proc_id, self.entries[next].task.ctx)

@@ -5,6 +5,8 @@ pub mod error;
 use core::alloc::Layout;
 use error::LoaderError;
 
+use crate::boot;
+use crate::mem::error::MemoryError;
 use crate::mem::paging::{PageSize, PageTableEntryFlags};
 use crate::parse::elf::{ElfObject, ProgramHeader};
 use crate::scheduler;
@@ -108,9 +110,53 @@ impl Loader {
             self.load_header(header)?;
         }
 
-        scheduler::with_scheduler(|scheduler| {
-            scheduler.create_task(self.proc_id, object.entry(), 3);
-        });
+        crate::log!("entry: {:#x?}", object.entry());
+
+        scheduler::with_scheduler(|scheduler| -> Result<(), MemoryError> {
+            let task_id = scheduler.create_task(self.proc_id, object.entry(), 3);
+            let task = scheduler.get_task(task_id);
+
+            let (kernel_ptr, kernel_len) = (
+                task.kernel_stack.0.as_ptr() as u64,
+                task.kernel_stack.0.len() as u64,
+            );
+
+            let (user_ptr, user_len) = (
+                task.user_stack.0.as_ptr() as u64,
+                task.user_stack.0.len() as u64,
+            );
+
+            let page_table = scheduler
+                .get_pt(self.proc_id)
+                .expect("failed to get page table for new process");
+
+            // TODO: THIS ENTIRE CODEBASE IS HORRIBLE, ITS AN UGLY MESS, I WILL NOT DO ANYTHING BEFORE I REWRITE IT. END OF STORY
+
+            page_table.identity_map(
+                kernel_ptr,
+                kernel_len / 4096,
+                PageTableEntryFlags::USER | PageTableEntryFlags::WRITE,
+                PageSize::Page4KiB,
+            )?;
+
+            page_table.identity_map(
+                user_ptr,
+                user_len / 4096,
+                PageTableEntryFlags::USER | PageTableEntryFlags::WRITE,
+                PageSize::Page4KiB,
+            )?;
+
+            let kernel_region = boot::kernel_region();
+
+            page_table.identity_map(
+                kernel_region.base,
+                kernel_region.bytes / 4096,
+                PageTableEntryFlags::USER,
+                PageSize::Page4KiB,
+            )?;
+
+            Ok(())
+        })?;
 
         Ok(())
     }

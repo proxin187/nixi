@@ -5,16 +5,18 @@ pub mod error;
 
 use crate::arch::x86_64::tables::tss::TaskStateSegment;
 use crate::arch::x86_64::tables::{TABLES, Tables};
-use crate::context::Context;
+use crate::scheduler::context::Context;
 
 use core::arch::naked_asm;
 
 /// Used to save the stack pointer without globbering any additional registers
-static STACK_POINTER_SAVE: u64 = 0;
+#[unsafe(no_mangle)]
+pub static STACK_POINTER_SAVE: u64 = 0;
 
 /// The syscall handler is called by the syscall instruction. The syscall handler only globbers rcx and r11, as these are globbered by the syscall instruction itself
+#[unsafe(no_mangle)]
 #[unsafe(naked)]
-pub fn syscall_handler() {
+pub extern "C" fn syscall_handler() {
     naked_asm!(
         // save rsp
         "mov [{stack_pointer_save}], rsp",

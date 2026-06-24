@@ -1,12 +1,19 @@
 //! Code for working with 64-bit paging
 
 use core::ops::Range;
+use core::sync::atomic::AtomicU64;
 
 use super::error::MemoryError;
 use super::pma;
 
 use crate::arch::x86_64;
 use crate::arch::x86_64::registers;
+
+/// The kernel page table
+pub static KERNEL_PAGE_TABLE: AtomicU64 = AtomicU64::new(0);
+
+/// The user page table
+pub static USER_PAGE_TABLE: AtomicU64 = AtomicU64::new(0);
 
 /// Represents the size of a page, modern processors support up to 1GiB pages
 #[derive(Debug, Clone, Copy)]
@@ -73,6 +80,13 @@ impl PageTable {
         flags: u64,
         size: PageSize,
     ) -> Result<(), MemoryError> {
+        crate::log!(
+            "identity map: addr={:#x?}, pages={:#x?}, size: {:?}",
+            addr,
+            pages,
+            size
+        );
+
         for page in 0..pages {
             let paddr = addr + (page * size.align());
 
@@ -90,6 +104,13 @@ impl PageTable {
         flags: u64,
         size: PageSize,
     ) -> Result<(), MemoryError> {
+        crate::log!(
+            "map consecutive range: vaddr={:#x?}, paddr={:#x?}, size: {:?}",
+            vaddr,
+            paddr,
+            size
+        );
+
         for page in 0..(vaddr.end - vaddr.start) / size.align() {
             let offset = page * size.align();
 
